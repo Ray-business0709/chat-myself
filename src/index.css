@@ -1,0 +1,24 @@
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  max-width: 38rem;
+  margin: 2rem auto;
+  padding: 0 1rem;
+}
+
+.messagebox{
+  display: flex;
+  margin-bottom: 0.5rem;
+}
+
+.user-message{
+  color: black;
+  padding: 0.5rem;
+  border-radius: 0.25rem;
+  border: 1px solid #000000;
+}
+
+.messagebox.from-user {
+  justify-content: flex-end;
+}
