@@ -3,7 +3,7 @@ body {
     -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
     sans-serif;
   max-width: 38rem;
-  margin: 2rem auto;
+  margin:0 auto;
   padding: 0 1rem;
 }
 
@@ -29,3 +29,4 @@ body {
 .messagebox.from-assistant {
   justify-content: flex-start;
 }
+
