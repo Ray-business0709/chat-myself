@@ -12,18 +12,14 @@ body {
   margin-bottom: 0.5rem;
 }
 
-.user-message{
-  color: black;
-  padding: 0.5rem;
-  border-radius: 0.25rem;
-  border: 1px solid #000000;
-}
-
+.user-message,
 .assistant-message{
   color: black;
   padding: 0.5rem;
   border-radius: 0.25rem;
   border: 1px solid #000000;
+  max-width: 70%;
+  word-wrap: break-word;
 }
 
 .messagebox.from-user {

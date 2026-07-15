@@ -1,4 +1,4 @@
-const { app, BrowserWindow } = require('electron');
+const { app, BrowserWindow , ipcMain} = require('electron');
 const path = require('node:path');
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
@@ -49,3 +49,9 @@ app.on('window-all-closed', () => {
 
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
+
+ipcMain.handle('talk', async (event, message) => {
+  // 這裡可以呼叫外部 API、讀寫檔案等等
+  console.log('收到 renderer 傳來的資料:', message);
+  return '這是回傳給 renderer 的結果';
+});
