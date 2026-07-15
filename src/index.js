@@ -57,15 +57,33 @@ app.on('window-all-closed', () => {
 //   return '成功透過IPC talk';
 // });
 
+// ipcMain.handle('talk', async (event, message) => {
+//   try {
+//     const response = await ai.models.generateContent({
+//       model: 'gemini-3.5-flash',
+//       contents: message,
+//     });
+//     return response.text;
+//   } catch (error) {
+//     console.error('呼叫 Gemini API 時發生錯誤:', error);
+//     return '抱歉，發生錯誤，請稍後再試。';
+//   }
+// });
+
 ipcMain.handle('talk', async (event, message) => {
-  try {
-    const response = await ai.models.generateContent({
+  try{
+    const response = await ai.models.generateContentStream({
       model: 'gemini-3.5-flash',
       contents: message,
     });
-    return response.text;
-  } catch (error) {
-    console.error('呼叫 Gemini API 時發生錯誤:', error);
-    return '抱歉，發生錯誤，請稍後再試。';
+
+    for await (const chunk of response) {
+      event.sender.send('chunk', chunk.text);
+    }
   }
+  catch (error) {
+    console.error('呼叫 Gemini API 時發生錯誤:', error);
+    event.sender.send('chunk', '抱歉，發生錯誤，請稍後再試。');
+  }
+  
 });

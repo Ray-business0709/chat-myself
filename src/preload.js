@@ -5,5 +5,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 contextBridge.exposeInMainWorld('DealwithMessage',{
     sendMessage:(message) => {
         return ipcRenderer.invoke('talk', message);
+    },
+    onChunk:(callback) =>{
+        ipcRenderer.on('chunk', (event, data) => callback(data));
     }
 })
