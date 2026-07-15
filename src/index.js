@@ -20,7 +20,7 @@ const createWindow = () => {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  // mainWindow.webContents.openDevTools();
 };
 
 // This method will be called when Electron has finished
@@ -52,6 +52,5 @@ app.on('window-all-closed', () => {
 
 ipcMain.handle('talk', async (event, message) => {
   // 這裡可以呼叫外部 API、讀寫檔案等等
-  console.log('收到 renderer 傳來的資料:', message);
-  return '這是回傳給 renderer 的結果';
+  return '成功透過IPC talk';
 });
