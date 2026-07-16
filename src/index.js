@@ -5,7 +5,7 @@ const path = require('node:path');
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 const { listTools, useTool } = require('./tools/toolkit');
 const chat = ai.chats.create({
-  model: 'gemini-3.5-flash',
+  model: 'gemini-3.1-flash-lite',
   config: {
     tools: [{ functionDeclarations: listTools() }],
   },

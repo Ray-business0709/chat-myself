@@ -1,8 +1,12 @@
 const getCurrentTime = require('./getCurrentTime');
-
+const readFile = require('./readFile');
+const writeFile = require('./writeFile');
+const searchFiles = require('./searchFiles');
 const tools = [
-  getCurrentTime,
-  // 以後新增工具,就繼續往這裡塞
+    getCurrentTime,
+    readFile,
+    writeFile,
+    searchFiles,
 ];
 
 const handlerMap = tools.reduce((acc, tool) => {
