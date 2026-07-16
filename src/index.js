@@ -55,37 +55,6 @@ app.on('window-all-closed', () => {
 // code. You can also put them in separate files and import them here.
 
 
-async function processResponse(response, event) {
-  let pendingFunctionCall = null;
-
-  for await (const chunk of response) {
-    if (chunk.functionCalls && chunk.functionCalls.length > 0) {
-      pendingFunctionCall = chunk.functionCalls[0];
-      console.log('收到 function call:', pendingFunctionCall);
-    } else {
-      console.log('[main] 送出 chunk:', JSON.stringify(chunk.text));
-      event.sender.send('chunk', chunk.text);
-    }
-  }
-
-  // 迴圈保證跑完(包含那個帶 finishReason 的 chunk)之後,才處理函式呼叫
-  if (pendingFunctionCall) {
-    const { name, args } = pendingFunctionCall;
-    const toolResult = useTool(name, args);
-
-    const nextResponse = await chat.sendMessageStream({
-      message: {
-        functionResponse: {
-          name,
-          response: { output: toolResult },
-        },
-      },
-    });
-
-    await processResponse(nextResponse, event);
-  }
-}
-
 ipcMain.handle('talk', async (event, message) => {
   try {
     messages.push({ role: 'user', content: message });
@@ -99,17 +68,38 @@ ipcMain.handle('talk', async (event, message) => {
       body: JSON.stringify({
         model: MODEL,
         messages: messages,
+        stream: true,
       }),
     });
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let fullReply = '';
+    let buffer = '';
 
-    const data = await response.json();
-    if (data.error) {
-      throw new Error(data.error.message);
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop(); // 最後一行可能不完整，留到下次跟新資料接起來
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const payload = line.slice(6);
+        if (payload === '[DONE]') continue;
+
+        const json = JSON.parse(payload);
+        const deltaText = json.choices[0].delta.content;
+
+        if (deltaText) {
+          fullReply += deltaText;
+          event.sender.send('chunk', deltaText);
+        }
+      }
     }
-    const replyText = data.choices[0].message.content;
 
-    messages.push({ role: 'assistant', content: replyText });
-    event.sender.send('chunk', replyText);
+    messages.push({ role: 'assistant', content: fullReply });
   } catch (error) {
     console.error('呼叫 OpenRouter API 時發生錯誤:', error);
     event.sender.send('chunk', '抱歉，發生錯誤，請稍後再試。');
