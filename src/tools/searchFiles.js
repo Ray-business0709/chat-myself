@@ -2,30 +2,33 @@ const fs = require('fs');
 const path = require('path');
 
 const searchFilesDeclaration = {
-    name: 'searchFiles',
-    description: '在指定資料夾中搜尋檔案，可選擇是否遞迴進入子資料夾、並依關鍵字或副檔名過濾。不帶關鍵字/副檔名時等同列出該資料夾內容',
-    parameters: {
-        type: 'OBJECT',
-        properties: {
-            startPath: {
-                type: 'STRING',
-                description: '要開始搜尋的資料夾路徑，例如 C:\\Users\\ray\\Documents 或 /Users/ray/Documents',
+    type: 'function',
+    function:{
+        name: 'searchFiles',
+        description: '在指定資料夾中搜尋檔案，可選擇是否遞迴進入子資料夾、並依關鍵字或副檔名過濾。不帶關鍵字/副檔名時等同列出該資料夾內容',
+        parameters: {
+            type: 'object',
+            properties: {
+                startPath: {
+                    type: 'string',
+                    description: '要開始搜尋的資料夾路徑，例如 C:\\Users\\ray\\Documents 或 /Users/ray/Documents',
+                },
+                keyword: {
+                    type: 'string',
+                    description: '選填，檔名需包含的關鍵字（不分大小寫）',
+                },
+                extension: {
+                    type: 'string',
+                    description: '選填，副檔名過濾，例如 ".pdf" 或 ".txt"',
+                },
+                recursive: {
+                    type: 'boolean',
+                    description: '是否遞迴搜尋所有子資料夾，預設 false（只看這一層）',
+                },
             },
-            keyword: {
-                type: 'STRING',
-                description: '選填，檔名需包含的關鍵字（不分大小寫）',
-            },
-            extension: {
-                type: 'STRING',
-                description: '選填，副檔名過濾，例如 ".pdf" 或 ".txt"',
-            },
-            recursive: {
-                type: 'BOOLEAN',
-                description: '是否遞迴搜尋所有子資料夾，預設 false（只看這一層）',
-            },
+            required: ['startPath'],
         },
-        required: ['startPath'],
-    },
+    }
 };
 
 const MAX_RESULTS = 100;

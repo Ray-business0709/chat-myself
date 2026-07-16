@@ -1,10 +1,11 @@
 require('dotenv').config();
 const { app, BrowserWindow , ipcMain} = require('electron');
 const path = require('node:path');
-// const { listTools, useTool } = require('./tools/toolkit');
+const { listTools, useTool } = require('./tools/toolkit');
 const MODEL = 'google/gemma-4-31b-it';
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const messages = [];
+let totalTokens = { prompt: 0, completion: 0, total: 0 };  // ← 加這行
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
@@ -54,52 +55,119 @@ app.on('window-all-closed', () => {
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 
-
-ipcMain.handle('talk', async (event, message) => {
-  try {
-    messages.push({ role: 'user', content: message });
-
+async function streamChat(event) {
     const response = await fetch(ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: MODEL,
-        messages: messages,
-        stream: true,
-      }),
+        method: 'POST',
+        headers: {
+            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+            model: MODEL,
+            messages: messages,
+            stream: true,
+            tools: listTools(),
+            stream_options: { include_usage: true },  
+        }),
     });
+
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let fullReply = '';
     let buffer = '';
+    const toolCallsAcc = []; // 用陣列存，位置(index)對應「第幾個 tool call」
 
     while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
+        const { done, value } = await reader.read();
+        if (done) break;
 
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop(); // 最後一行可能不完整，留到下次跟新資料接起來
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop();
+        for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const payload = line.slice(6);
+            if (payload === '[DONE]') continue;
 
-      for (const line of lines) {
-        if (!line.startsWith('data: ')) continue;
-        const payload = line.slice(6);
-        if (payload === '[DONE]') continue;
+            const json = JSON.parse(payload);
+            // 先檢查有沒有 usage，跟 choices 是否存在無關
+            if (json.usage) {
+                totalTokens.prompt += json.usage.prompt_tokens;
+                totalTokens.completion += json.usage.completion_tokens;
+                totalTokens.total += json.usage.total_tokens;
+                console.log(`本次用量：prompt ${json.usage.prompt_tokens} + completion ${json.usage.completion_tokens} = ${json.usage.total_tokens}`);
+                console.log(`累計用量：`, totalTokens);
+            }
 
-        const json = JSON.parse(payload);
-        const deltaText = json.choices[0].delta.content;
+            // 再檢查有沒有 choices 可以處理
+            if (!json.choices || json.choices.length === 0) {
+                continue;
+            }
 
-        if (deltaText) {
-          fullReply += deltaText;
-          event.sender.send('chunk', deltaText);
+            const delta = json.choices[0].delta;
+
+            if (delta.content) {
+                fullReply += delta.content;
+                event.sender.send('chunk', delta.content);
+            }
+
+            if (delta.tool_calls) {
+                for (const fragment of delta.tool_calls) {
+                    const index = fragment.index;
+
+                    if (!toolCallsAcc[index]) {
+                        toolCallsAcc[index] = { id: '', function: { name: '', arguments: '' } };
+                    }
+
+                    if (fragment.id) {
+                        toolCallsAcc[index].id = fragment.id;
+                    }
+                    if (fragment.function.name) {
+                        toolCallsAcc[index].function.name = fragment.function.name;
+                    }
+                    if (fragment.function.arguments) {
+                        toolCallsAcc[index].function.arguments += fragment.function.arguments;
+                    }
+                }
+            }
         }
-      }
     }
-
+    if (toolCallsAcc.length > 0) {
+        messages.push({
+            role: 'assistant',
+            content: fullReply || null,
+            tool_calls: toolCallsAcc.map(tc => ({
+                id: tc.id,
+                type: 'function',
+                function: { name: tc.function.name, arguments: tc.function.arguments },
+            })),
+        });
+        for (const toolCall of toolCallsAcc) {
+            const args = JSON.parse(toolCall.function.arguments);
+            let toolResponse = useTool(toolCall.function.name, args);
+            if(typeof(toolResponse) !== 'string') {
+                toolResponse = JSON.stringify(toolResponse);
+            }
+            messages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: toolResponse,
+            });
+        }
+        await streamChat(event);
+    } else {
+    // 沒有要用工具，就是一般文字回答，正常結束
     messages.push({ role: 'assistant', content: fullReply });
+    }
+    
+}
+
+
+
+ipcMain.handle('talk', async (event, message) => {
+  try {
+    messages.push({ role: 'user', content: message });
+    await streamChat(event);
   } catch (error) {
     console.error('呼叫 OpenRouter API 時發生錯誤:', error);
     event.sender.send('chunk', '抱歉，發生錯誤，請稍後再試。');

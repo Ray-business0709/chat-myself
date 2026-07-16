@@ -1,18 +1,21 @@
 const fs = require('fs');
 
 const readFileDeclaration = {
-    name: 'readFile',
-    description: '讀取本機檔案的內容，回傳文字內容',
-    parameters: {
-        type: 'OBJECT',
-        properties: {
-            filePath: {
-                type: 'STRING',
-                description: '要讀取的檔案完整路徑，例如 C:\\Users\\ray\\notes.txt 或 /Users/ray/notes.txt',
+    type :'function',
+    function : {
+        name: 'readFile',
+        description: '讀取本機檔案的內容，回傳文字內容',
+        parameters: {
+            type: 'object',
+            properties: {
+                filePath: {
+                    type: 'string',
+                    description: '要讀取的檔案完整路徑，例如 C:\\Users\\ray\\notes.txt 或 /Users/ray/notes.txt',
+                },
             },
+            required: ['filePath'],
         },
-        required: ['filePath'],
-    },
+    }
 };
 
 function readFile(args) {

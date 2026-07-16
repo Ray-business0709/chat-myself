@@ -10,7 +10,7 @@ const tools = [
 ];
 
 const handlerMap = tools.reduce((acc, tool) => {
-  acc[tool.declaration.name] = tool.handler;
+  acc[tool.declaration.function.name] = tool.handler;
   return acc;
 }, {});
 
