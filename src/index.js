@@ -3,7 +3,13 @@ const { GoogleGenAI } = require('@google/genai');
 const { app, BrowserWindow , ipcMain} = require('electron');
 const path = require('node:path');
 const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-const chat = ai.chats.create({ model: 'gemini-3.5-flash' });
+const { listTools, useTool } = require('./tools/toolkit');
+const chat = ai.chats.create({
+  model: 'gemini-3.5-flash',
+  config: {
+    tools: [{ functionDeclarations: listTools() }],
+  },
+});
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
@@ -23,7 +29,7 @@ const createWindow = () => {
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   // Open the DevTools.
-  // mainWindow.webContents.openDevTools();
+  mainWindow.webContents.openDevTools();
 };
 
 // This method will be called when Electron has finished
@@ -54,23 +60,45 @@ app.on('window-all-closed', () => {
 // code. You can also put them in separate files and import them here.
 
 
-ipcMain.handle('talk', async (event, message) => {
-  try{
-    // const response = await ai.models.generateContentStream({
-    //   model: 'gemini-3.5-flash',
-    //   contents: message,
-    // });
-    const response = await chat.sendMessageStream({
-      message: message,
-    })
+async function processResponse(response, event) {
+  let pendingFunctionCall = null;
 
-    for await (const chunk of response) {
+  for await (const chunk of response) {
+    if (chunk.functionCalls && chunk.functionCalls.length > 0) {
+      pendingFunctionCall = chunk.functionCalls[0];
+      console.log('收到 function call:', pendingFunctionCall);
+    } else {
+      console.log('[main] 送出 chunk:', JSON.stringify(chunk.text));
       event.sender.send('chunk', chunk.text);
     }
   }
-  catch (error) {
+
+  // 迴圈保證跑完(包含那個帶 finishReason 的 chunk)之後,才處理函式呼叫
+  if (pendingFunctionCall) {
+    const { name, args } = pendingFunctionCall;
+    const toolResult = useTool(name, args);
+
+    const nextResponse = await chat.sendMessageStream({
+      message: {
+        functionResponse: {
+          name,
+          response: { output: toolResult },
+        },
+      },
+    });
+
+    await processResponse(nextResponse, event);
+  }
+}
+
+ipcMain.handle('talk', async (event, message) => {
+  try {
+    const response = await chat.sendMessageStream({ message });
+    await processResponse(response, event);
+  } catch (error) {
     console.error('呼叫 Gemini API 時發生錯誤:', error);
     event.sender.send('chunk', '抱歉，發生錯誤，請稍後再試。');
+  } finally {
+    event.sender.send('chunk-done');  // 新增:明確標記「這一輪徹底結束」
   }
-  
 });
