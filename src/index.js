@@ -7,6 +7,59 @@ const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const messages = [];
 let totalTokens = { prompt: 0, completion: 0, total: 0 };  // ← 加這行
 let msgTokenCount = 0;  // 用來計算訊息的 token 數量
+
+const fs = require('fs');
+const { log } = require('node:console');
+
+const TOKEN_LOG_PATH = path.join(__dirname, 'logs', 'token-usage.csv');
+
+function getNextSessionId() {
+    if (!fs.existsSync(TOKEN_LOG_PATH)) {
+        return 1;   // 檔案不存在，這是有史以來第一次執行
+    }
+
+    const lines = fs.readFileSync(TOKEN_LOG_PATH, 'utf-8')
+        .split('\n')
+        .filter(line => line.trim() !== '');   // 過濾掉切割出來的空字串
+
+    const lastLine = lines[lines.length - 1];
+    if (!lastLine || lastLine.startsWith('session,')) {
+        return 1;   // 檔案存在但只有表頭、沒有任何資料列
+    }
+
+    const lastSessionId = parseInt(lastLine.split(',')[0], 10);
+    return isNaN(lastSessionId) ? 1 : lastSessionId + 1;
+}
+
+let sessionId = getNextSessionId();   // 程式一啟動就決定好，整個 session 期間不變
+
+function formatTimestamp(date) {
+    const pad = (n) => String(n).padStart(2, '0');
+    const yyyy = date.getFullYear();
+    const mm = pad(date.getMonth() + 1);
+    const dd = pad(date.getDate());
+    const hh = pad(date.getHours());
+    const min = pad(date.getMinutes());
+    const ss = pad(date.getSeconds());
+    return `${yyyy}-${mm}-${dd} ${hh}:${min}:${ss}`;
+}
+
+function logTokenUsage(tokenCount, cumulativeTokens) {
+    const logDir = path.dirname(TOKEN_LOG_PATH);
+    if (!fs.existsSync(logDir)) {
+        fs.mkdirSync(logDir, { recursive: true });
+    }
+
+    const isNewFile = !fs.existsSync(TOKEN_LOG_PATH);
+    if (isNewFile) {
+        fs.appendFileSync(TOKEN_LOG_PATH, 'session,time,tokens,cumulative_tokens\n', 'utf-8');
+    }
+
+    const timestamp = formatTimestamp(new Date());
+    fs.appendFileSync(TOKEN_LOG_PATH, `${sessionId},${timestamp},${tokenCount},${cumulativeTokens}\n`, 'utf-8');
+}
+
+
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
@@ -161,6 +214,7 @@ async function streamChat(event) {
     // 沒有要用工具，就是一般文字回答，正常結束
     messages.push({ role: 'assistant', content: fullReply });
     event.sender.send('token-count', msgTokenCount);  // 回覆完成後，傳送訊息的 token 計數
+    logTokenUsage(msgTokenCount, totalTokens.total); // 回覆完成後，寫入 token 使用紀錄
     msgTokenCount = 0;  // 回覆完成後，重置訊息的 token 計數
     }
     

@@ -19,7 +19,7 @@ const writeFileDeclaration = {
                 },
                 mode: {
                     type: 'string',
-                    description: '寫入模式："overwrite"（覆寫，預設）或 "append"（附加在檔案最後）',
+                    description: '寫入模式："overwrite"（覆寫）或 "append"（附加在檔案最後，預設）',
                 },
             },
             required: ['filePath', 'content'],
@@ -36,10 +36,11 @@ function writeFile(args) {
             fs.mkdirSync(dir, { recursive: true });
         }
 
-        if (mode === 'append') {
-            fs.appendFileSync(filePath, content, 'utf-8');
-        } else {
+        if (mode === 'overwrite') {
             fs.writeFileSync(filePath, content, 'utf-8');
+            
+        } else {
+            fs.appendFileSync(filePath, content, 'utf-8');
         }
 
         return `已成功寫入檔案：${filePath}`;

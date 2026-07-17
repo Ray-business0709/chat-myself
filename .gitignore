@@ -92,3 +92,5 @@ typings/
 out/
 
 .env
+
+token-usage-log.csv
