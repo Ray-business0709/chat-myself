@@ -9,8 +9,10 @@ body {
 
 .messagebox{
   display: flex;
-  flex-direction: row;   /* 改成直排：泡泡在上，token 資訊在下 */
+  flex-direction: row;   
   margin-bottom: 0.5rem;
+  align-items: flex-end;   /* 讓泡泡跟 token 文字底部對齊 */
+  gap: 0.4rem;              /* 泡泡跟 token 之間留間距 */
 }
 
 .user-message,
@@ -37,5 +39,4 @@ body {
   text-align: right;
   white-space: pre-line;    /* 讓字串裡的 \n 生效（上一輪討論過的換行方法）*/
   margin-top: 0.15rem;
-  justify-content: flex-end;  
 }

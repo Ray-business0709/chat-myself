@@ -44,7 +44,7 @@ window.DealwithMessage.onTokenCount((tokenCount) => {
     totalTokenCount += tokenCount;
     if (currentTokenCountDiv) {
         currentTokenCountDiv.textContent =
-            `這則訊息消耗：${tokenCount} token\n累積消耗：${totalTokenCount} token`;
+            `當前消耗：${tokenCount} token\n累積消耗：${totalTokenCount} token`;
     }
 });
 
