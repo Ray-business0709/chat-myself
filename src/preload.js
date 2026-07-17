@@ -10,4 +10,7 @@ contextBridge.exposeInMainWorld('DealwithMessage',{
         ipcRenderer.on('chunk', (event, data) => callback(data));
     },
     onDone: (callback) => ipcRenderer.on('chunk-done', () => callback()),
+    onTokenCount: (callback) => {
+        return ipcRenderer.on('token-count', (event, data) => callback(data));
+    }
 })

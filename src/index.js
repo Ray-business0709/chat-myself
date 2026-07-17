@@ -6,6 +6,7 @@ const MODEL = 'google/gemma-4-31b-it';
 const ENDPOINT = 'https://openrouter.ai/api/v1/chat/completions';
 const messages = [];
 let totalTokens = { prompt: 0, completion: 0, total: 0 };  // ← 加這行
+let msgTokenCount = 0;  // 用來計算訊息的 token 數量
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (require('electron-squirrel-startup')) {
   app.quit();
@@ -97,6 +98,7 @@ async function streamChat(event) {
                 totalTokens.total += json.usage.total_tokens;
                 console.log(`本次用量：prompt ${json.usage.prompt_tokens} + completion ${json.usage.completion_tokens} = ${json.usage.total_tokens}`);
                 console.log(`累計用量：`, totalTokens);
+                msgTokenCount += json.usage.total_tokens;  // 更新訊息的 token 數量
             }
 
             // 再檢查有沒有 choices 可以處理
@@ -158,6 +160,8 @@ async function streamChat(event) {
     } else {
     // 沒有要用工具，就是一般文字回答，正常結束
     messages.push({ role: 'assistant', content: fullReply });
+    event.sender.send('token-count', msgTokenCount);  // 回覆完成後，傳送訊息的 token 計數
+    msgTokenCount = 0;  // 回覆完成後，重置訊息的 token 計數
     }
     
 }

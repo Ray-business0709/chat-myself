@@ -9,6 +9,7 @@ body {
 
 .messagebox{
   display: flex;
+  flex-direction: row;   /* 改成直排：泡泡在上，token 資訊在下 */
   margin-bottom: 0.5rem;
 }
 
@@ -23,10 +24,18 @@ body {
 }
 
 .messagebox.from-user {
-  justify-content: flex-end;
+  justify-content: flex-end;  
 }
 
 .messagebox.from-assistant {
   justify-content: flex-start;
 }
 
+.token-count {
+  font-size: 0.6rem;
+  color: #888;
+  text-align: right;
+  white-space: pre-line;    /* 讓字串裡的 \n 生效（上一輪討論過的換行方法）*/
+  margin-top: 0.15rem;
+  justify-content: flex-end;  
+}
