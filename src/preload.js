@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('DealwithMessage',{
     sendMessage:(message) => {
         return ipcRenderer.invoke('talk', message);
     },
+    stopMessage: () => ipcRenderer.send('stop'),
     onChunk:(callback) =>{
         ipcRenderer.on('chunk', (event, data) => callback(data));
     },

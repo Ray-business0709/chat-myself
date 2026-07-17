@@ -109,83 +109,100 @@ app.on('window-all-closed', () => {
 // In this file you can include the rest of your app's specific main process
 // code. You can also put them in separate files and import them here.
 
-async function streamChat(event) {
-    const response = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            model: MODEL,
-            messages: messages,
-            stream: true,
-            tools: listTools(),
-            stream_options: { include_usage: true },  
-        }),
-    });
+let currentAbortController = null;
 
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
+async function streamChat(event) {
+    currentAbortController = new AbortController();
     let fullReply = '';
-    let buffer = '';
     const toolCallsAcc = []; // 用陣列存，位置(index)對應「第幾個 tool call」
 
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+    try {
+        const response = await fetch(ENDPOINT, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${process.env.OPENROUTER_API_KEY}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: MODEL,
+                messages: messages,
+                stream: true,
+                tools: listTools(),
+                stream_options: { include_usage: true },
+            }),
+            signal: currentAbortController.signal,
+        });
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop();
-        for (const line of lines) {
-            if (!line.startsWith('data: ')) continue;
-            const payload = line.slice(6);
-            if (payload === '[DONE]') continue;
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
 
-            const json = JSON.parse(payload);
-            // 先檢查有沒有 usage，跟 choices 是否存在無關
-            if (json.usage) {
-                totalTokens.prompt += json.usage.prompt_tokens;
-                totalTokens.completion += json.usage.completion_tokens;
-                totalTokens.total += json.usage.total_tokens;
-                console.log(`本次用量：prompt ${json.usage.prompt_tokens} + completion ${json.usage.completion_tokens} = ${json.usage.total_tokens}`);
-                console.log(`累計用量：`, totalTokens);
-                msgTokenCount += json.usage.total_tokens;  // 更新訊息的 token 數量
-            }
+        while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
 
-            // 再檢查有沒有 choices 可以處理
-            if (!json.choices || json.choices.length === 0) {
-                continue;
-            }
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            for (const line of lines) {
+                if (!line.startsWith('data: ')) continue;
+                const payload = line.slice(6);
+                if (payload === '[DONE]') continue;
 
-            const delta = json.choices[0].delta;
+                const json = JSON.parse(payload);
+                // 先檢查有沒有 usage，跟 choices 是否存在無關
+                if (json.usage) {
+                    totalTokens.prompt += json.usage.prompt_tokens;
+                    totalTokens.completion += json.usage.completion_tokens;
+                    totalTokens.total += json.usage.total_tokens;
+                    console.log(`本次用量：prompt ${json.usage.prompt_tokens} + completion ${json.usage.completion_tokens} = ${json.usage.total_tokens}`);
+                    console.log(`累計用量：`, totalTokens);
+                    msgTokenCount += json.usage.total_tokens;  // 更新訊息的 token 數量
+                }
 
-            if (delta.content) {
-                fullReply += delta.content;
-                event.sender.send('chunk', delta.content);
-            }
+                // 再檢查有沒有 choices 可以處理
+                if (!json.choices || json.choices.length === 0) {
+                    continue;
+                }
 
-            if (delta.tool_calls) {
-                for (const fragment of delta.tool_calls) {
-                    const index = fragment.index;
+                const delta = json.choices[0].delta;
 
-                    if (!toolCallsAcc[index]) {
-                        toolCallsAcc[index] = { id: '', function: { name: '', arguments: '' } };
-                    }
+                if (delta.content) {
+                    fullReply += delta.content;
+                    event.sender.send('chunk', delta.content);
+                }
 
-                    if (fragment.id) {
-                        toolCallsAcc[index].id = fragment.id;
-                    }
-                    if (fragment.function.name) {
-                        toolCallsAcc[index].function.name = fragment.function.name;
-                    }
-                    if (fragment.function.arguments) {
-                        toolCallsAcc[index].function.arguments += fragment.function.arguments;
+                if (delta.tool_calls) {
+                    for (const fragment of delta.tool_calls) {
+                        const index = fragment.index;
+
+                        if (!toolCallsAcc[index]) {
+                            toolCallsAcc[index] = { id: '', function: { name: '', arguments: '' } };
+                        }
+
+                        if (fragment.id) {
+                            toolCallsAcc[index].id = fragment.id;
+                        }
+                        if (fragment.function.name) {
+                            toolCallsAcc[index].function.name = fragment.function.name;
+                        }
+                        if (fragment.function.arguments) {
+                            toolCallsAcc[index].function.arguments += fragment.function.arguments;
+                        }
                     }
                 }
             }
         }
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            // 使用者按了停止：把已生成的部分存進對話歷史（跟畫面上顯示的一致），
+            // 不再處理 tool call、也不再遞迴
+            if (fullReply) {
+                messages.push({ role: 'assistant', content: fullReply });
+            }
+            return;
+        }
+        throw error;
     }
     if (toolCallsAcc.length > 0) {
         messages.push({
@@ -221,6 +238,12 @@ async function streamChat(event) {
 }
 
 
+
+ipcMain.on('stop', () => {
+  if (currentAbortController) {
+    currentAbortController.abort();
+  }
+});
 
 ipcMain.handle('talk', async (event, message) => {
   try {

@@ -2,12 +2,24 @@ let currentAssistantDiv = null;
 let currentTokenCountDiv = null;     // 新增：跟 currentAssistantDiv 平行存在
 let totalTokenCount = 0;             // 用來累計「從程式啟動到現在」的總 token 數
 
-document.getElementById('send-button').addEventListener('click', async () => {
+let isGenerating = false;   // 目前是否有一輪 AI 回覆正在進行中
+const sendButton = document.getElementById('send-button');
+
+sendButton.addEventListener('click', async () => {
+    if (isGenerating) {
+        // 生成中再按一次 = 停止（就算第一個 chunk 還沒到也能中斷 fetch）
+        window.DealwithMessage.stopMessage();
+        return;
+    }
+
     const messageInput = document.getElementById('message-input');
     const message = messageInput.value.trim();
     if (message) {
         renderMessage(message, 'user');
         messageInput.value = '';
+        // 送出的當下就切換狀態，避免連點造成第二次 sendMessage
+        isGenerating = true;
+        sendButton.textContent = 'Stop';
         await window.DealwithMessage.sendMessage(message);
     }
 });
@@ -51,4 +63,6 @@ window.DealwithMessage.onTokenCount((tokenCount) => {
 window.DealwithMessage.onDone(() => {
     currentAssistantDiv = null;
     currentTokenCountDiv = null;   // 兩個都要重置，準備給下一輪用
+    isGenerating = false;
+    sendButton.textContent = 'Send';
 });
